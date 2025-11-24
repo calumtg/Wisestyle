@@ -1,53 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { Coffee, Pizza, Tv, TrendingUp, DollarSign, Calendar, Percent, Info, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Coffee, Pizza, Tv, TrendingUp, DollarSign, Calendar, Percent, Info, 
+  Plus, Wallet, ArrowUpRight, X, Trash2, ArrowRight, ShoppingBag, 
+  Car, Beer, Cigarette, Gamepad2, Dumbbell, Smartphone, Home, Music
+} from 'lucide-react';
+
+// --- CONSTANTS & CONFIG ---
+const ICON_MAP = {
+  coffee: <Coffee size={18} />,
+  pizza: <Pizza size={18} />,
+  tv: <Tv size={18} />,
+  shopping: <ShoppingBag size={18} />,
+  car: <Car size={18} />,
+  beer: <Beer size={18} />,
+  smoke: <Cigarette size={18} />,
+  game: <Gamepad2 size={18} />,
+  gym: <Dumbbell size={18} />,
+  phone: <Smartphone size={18} />,
+  home: <Home size={18} />,
+  music: <Music size={18} />
+};
+
+const DEFAULT_CATEGORIES = [
+  { id: '1', name: 'Coffee', iconKey: 'coffee', current: 5, target: 0, freq: 'daily' },
+  { id: '2', name: 'Lunch', iconKey: 'pizza', current: 20, target: 5, freq: 'daily' },
+  { id: '3', name: 'Streaming', iconKey: 'tv', current: 50, target: 15, freq: 'monthly' },
+];
 
 const App = () => {
-  // State for the calculator
-  const [purchaseName, setPurchaseName] = useState('Daily Coffee');
-  const [cost, setCost] = useState(5);
-  const [frequency, setFrequency] = useState('daily'); // daily, weekly, monthly
-  const [years, setYears] = useState(10);
-  const [rate, setRate] = useState(7); // Annual return rate
-  const [activeTab, setActiveTab] = useState('calculator');
+  const [activeTab, setActiveTab] = useState('home');
+  
+  // --- GLOBAL STATE ---
+  const [totalSaved, setTotalSaved] = useState(0);
+  const [history, setHistory] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
 
-  // Calculation State
-  const [results, setResults] = useState({
-    principal: 0,
-    interest: 0,
-    total: 0
-  });
+  const handleAddSavings = (amount, label, icon) => {
+    setTotalSaved(prev => prev + amount);
+    setHistory(prev => [{
+      id: Date.now(),
+      amount,
+      label,
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      icon
+    }, ...prev]);
+    setShowAddModal(false);
+  };
 
-  // Calculate whenever inputs change
-  useEffect(() => {
-    calculateCompoundInterest();
-  }, [cost, frequency, years, rate]);
-
-  const calculateCompoundInterest = () => {
-    let periodsPerYear = 365;
-    if (frequency === 'weekly') periodsPerYear = 52;
-    if (frequency === 'monthly') periodsPerYear = 12;
-
-    const totalPeriods = years * periodsPerYear;
-    const periodicRate = (rate / 100) / periodsPerYear;
-
-    // Future Value formula for a series of payments (Annuity)
-    // FV = P * [((1 + r)^n - 1) / r]
-    let futureValue = 0;
-    
-    if (rate === 0) {
-      futureValue = cost * totalPeriods;
-    } else {
-      futureValue = cost * ((Math.pow(1 + periodicRate, totalPeriods) - 1) / periodicRate);
+  const handleDeleteSavings = (id) => {
+    const itemToDelete = history.find(item => item.id === id);
+    if (itemToDelete) {
+      setTotalSaved(prev => Math.max(0, prev - itemToDelete.amount));
+      setHistory(prev => prev.filter(item => item.id !== id));
     }
+  };
 
-    const principal = cost * totalPeriods;
-    const interest = futureValue - principal;
-
-    setResults({
-      principal: principal,
-      interest: interest,
-      total: futureValue
-    });
+  const handleAddCategory = (newCat) => {
+    setCategories(prev => [...prev, { ...newCat, id: Date.now().toString() }]);
   };
 
   const formatCurrency = (val) => {
@@ -58,45 +68,366 @@ const App = () => {
     }).format(val);
   };
 
-  const presets = [
-    { name: 'Coffee', icon: <Coffee size={18} />, cost: 5, freq: 'daily' },
-    { name: 'Lunch', icon: <Pizza size={18} />, cost: 15, freq: 'daily' },
-    { name: 'Streaming', icon: <Tv size={18} />, cost: 18, freq: 'monthly' },
-  ];
+  return (
+    <div className="flex flex-col h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden max-w-md mx-auto border-x border-gray-200 shadow-2xl relative">
+      
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto pb-24 scrollbar-hide">
+        {activeTab === 'home' ? (
+          <HomeView 
+            totalSaved={totalSaved} 
+            history={history} 
+            formatCurrency={formatCurrency}
+            onOpenAdd={() => setShowAddModal(true)}
+            onDelete={handleDeleteSavings}
+          />
+        ) : activeTab === 'calculator' ? (
+          <CalculatorView 
+            formatCurrency={formatCurrency} 
+            categories={categories}
+            onAddCategory={handleAddCategory}
+          />
+        ) : (
+          <div className="p-8 text-center text-gray-400 mt-20">Coming Soon</div>
+        )}
+      </div>
 
-  const applyPreset = (preset) => {
-    setPurchaseName(preset.name);
-    setCost(preset.cost);
-    setFrequency(preset.freq);
+      {/* Add Savings Modal Overlay (Home Tab) */}
+      {showAddModal && (
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-gray-900">What did you skip?</h3>
+              <button onClick={() => setShowAddModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-500">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <button 
+                onClick={() => handleAddSavings(5, 'Skipped Coffee', <Coffee size={20}/>)}
+                className="flex flex-col items-center gap-3 p-6 bg-orange-50 hover:bg-orange-100 border border-orange-100 rounded-2xl transition-colors"
+              >
+                <div className="bg-orange-200 p-3 rounded-full text-orange-700"><Coffee size={24} /></div>
+                <div className="text-center">
+                  <span className="block font-bold text-gray-900">$5.00</span>
+                  <span className="text-xs text-orange-800 font-medium">Coffee</span>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => handleAddSavings(15, 'Skipped Lunch', <Pizza size={20}/>)}
+                className="flex flex-col items-center gap-3 p-6 bg-red-50 hover:bg-red-100 border border-red-100 rounded-2xl transition-colors"
+              >
+                <div className="bg-red-200 p-3 rounded-full text-red-700"><Pizza size={24} /></div>
+                <div className="text-center">
+                  <span className="block font-bold text-gray-900">$15.00</span>
+                  <span className="text-xs text-red-800 font-medium">Lunch</span>
+                </div>
+              </button>
+            </div>
+
+            <button 
+               onClick={() => handleAddSavings(10, 'Manual Save', <Wallet size={20}/>)}
+               className="w-full py-4 rounded-xl font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200"
+            >
+              Other Amount
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* iOS Tab Bar */}
+      <div className="bg-white border-t border-gray-200 px-6 py-2 pb-6 flex justify-between items-center text-xs font-medium text-gray-400 fixed bottom-0 w-full max-w-md z-40">
+        <button 
+          onClick={() => setActiveTab('home')}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'home' ? 'text-blue-600' : 'hover:text-gray-600'}`}
+        >
+          <Wallet size={24} />
+          <span>Savings</span>
+        </button>
+        
+        {/* Floating Middle Button */}
+        <div className="relative -top-5">
+          <button 
+            onClick={() => setShowAddModal(true)}
+            className="bg-blue-600 text-white p-4 rounded-full shadow-lg shadow-blue-600/30 hover:scale-105 transition-transform"
+          >
+            <Plus size={28} />
+          </button>
+        </div>
+
+        <button 
+          onClick={() => setActiveTab('calculator')}
+          className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'calculator' ? 'text-blue-600' : 'hover:text-gray-600'}`}
+        >
+          <TrendingUp size={24} />
+          <span>Compound</span>
+        </button>
+      </div>
+
+    </div>
+  );
+};
+
+// --- SUB-COMPONENTS ---
+
+const GrowthChart = ({ currentAmount }) => {
+  const points = useMemo(() => {
+    const data = [];
+    const years = 10;
+    const rate = 0.07; // 7% growth
+    
+    if (currentAmount === 0) return [];
+
+    for (let i = 0; i <= years; i++) {
+      const val = currentAmount * Math.pow(1 + rate, i);
+      data.push(val);
+    }
+    return data;
+  }, [currentAmount]);
+
+  if (currentAmount === 0) return null;
+
+  const width = 300;
+  const height = 100;
+  const maxVal = points[points.length - 1];
+  const minVal = points[0];
+  
+  // Normalize points to SVG coordinates
+  // Y axis is inverted (0 is top)
+  const svgPoints = points.map((val, idx) => {
+    const x = (idx / (points.length - 1)) * width;
+    const normalizedY = ((val - minVal) / (maxVal - minVal || 1)); 
+    // Scale slightly to keep line within view, leave 10px padding top/bottom
+    const y = height - (normalizedY * (height - 20)) - 10; 
+    return `${x},${y}`;
+  }).join(' ');
+
+  // Create area path (close the loop at bottom)
+  const areaPath = `${svgPoints} L ${width},${height} L 0,${height} Z`;
+
+  return (
+    <div className="mt-6 bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+      <div className="flex justify-between items-end mb-4">
+        <div>
+           <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Projected Growth (10Y)</p>
+           <p className="text-2xl font-bold text-gray-900">
+             {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(maxVal)}
+           </p>
+        </div>
+        <div className="text-right">
+           <span className="inline-flex items-center text-green-600 bg-green-50 px-2 py-1 rounded-lg text-xs font-bold">
+             +7% APY
+           </span>
+        </div>
+      </div>
+      
+      <div className="relative h-32 w-full">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#2563EB" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#2563EB" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          
+          {/* Area Fill */}
+          <path d={`M ${svgPoints.split(' ')[0]} ${areaPath}`} fill="url(#gradient)" stroke="none" />
+          
+          {/* Line */}
+          <polyline points={svgPoints} fill="none" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          
+          {/* End Dot */}
+          {points.length > 0 && (
+             <circle 
+               cx={width} 
+               cy={svgPoints.split(' ').pop().split(',')[1]} 
+               r="4" 
+               fill="#2563EB" 
+               stroke="white" 
+               strokeWidth="2"
+             />
+          )}
+        </svg>
+        
+        {/* X Axis Labels */}
+        <div className="flex justify-between text-[10px] text-gray-400 mt-2 font-medium">
+          <span>Now</span>
+          <span>5 Years</span>
+          <span>10 Years</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const HomeView = ({ totalSaved, history, formatCurrency, onOpenAdd, onDelete }) => {
+  return (
+    <>
+      <div className="pt-12 pb-4 px-6 bg-white flex justify-between items-center sticky top-0 z-10">
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Portfolio</h1>
+        <button className="bg-gray-100 p-2 rounded-full text-gray-600">
+           <Calendar size={20} />
+        </button>
+      </div>
+
+      <div className="px-6 mt-4">
+        {/* Hero Card */}
+        <div className="p-8 bg-gray-900 rounded-[2.5rem] shadow-xl text-white relative overflow-hidden transition-all duration-300">
+          {/* Decorative gradients */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20 -mr-16 -mt-16"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20 -ml-10 -mb-10"></div>
+          
+          <div className="relative z-10 text-center">
+            <p className="text-gray-400 text-sm font-medium uppercase tracking-wider mb-2">Total Saved</p>
+            <h2 className="text-5xl font-bold tracking-tight mb-2">{formatCurrency(totalSaved)}</h2>
+            <div className="inline-flex items-center gap-1 bg-green-500/20 text-green-300 px-3 py-1 rounded-full text-xs font-medium">
+               <ArrowUpRight size={12} />
+               <span>Invested @ 7%</span>
+            </div>
+            
+            <div className="mt-8">
+                <button 
+                  onClick={onOpenAdd}
+                  className="w-full py-3 bg-white text-gray-900 rounded-xl font-bold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
+                >
+                  <Plus size={18} strokeWidth={3} />
+                  Add Savings
+                </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Growth Graph - Only shows if there are savings */}
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
+          <GrowthChart currentAmount={totalSaved} />
+        </div>
+
+        {/* Recent History Section */}
+        <div className="mt-8">
+          <h3 className="text-gray-900 font-bold text-lg mb-4 px-2">Recent Saves</h3>
+          
+          {history.length === 0 ? (
+            <div className="text-center py-10 bg-white rounded-3xl border border-gray-100 border-dashed">
+              <div className="bg-gray-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-300">
+                <Wallet size={24} />
+              </div>
+              <p className="text-gray-400 text-sm">No savings yet.<br/>Skip a purchase to start!</p>
+            </div>
+          ) : (
+            <div className="space-y-3 pb-24">
+              {history.map((item) => (
+                <div key={item.id} className="bg-white p-4 rounded-2xl flex items-center justify-between shadow-sm border border-gray-100 group">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-50 text-blue-600 p-3 rounded-xl">
+                      {item.icon || <DollarSign size={20} />}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{item.label}</p>
+                      <p className="text-xs text-gray-400">{item.date}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-green-600">+{formatCurrency(item.amount)}</span>
+                    <button 
+                      onClick={() => onDelete(item.id)}
+                      className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                      aria-label="Delete item"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+const CalculatorView = ({ formatCurrency, categories, onAddCategory }) => {
+  const [currentSpend, setCurrentSpend] = useState(15);
+  const [targetSpend, setTargetSpend] = useState(5);
+  const [frequency, setFrequency] = useState('daily');
+  const [years, setYears] = useState(10);
+  const [rate, setRate] = useState(7);
+  const [results, setResults] = useState({ principal: 0, interest: 0, total: 0 });
+  
+  // Create Category Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatCurrent, setNewCatCurrent] = useState(10);
+  const [newCatTarget, setNewCatTarget] = useState(0);
+  const [newCatIcon, setNewCatIcon] = useState('shopping');
+
+  useEffect(() => {
+    // Determine how much is being saved per period (Current - Target)
+    const savedPerPeriod = Math.max(0, currentSpend - targetSpend);
+
+    let periodsPerYear = 365;
+    if (frequency === 'weekly') periodsPerYear = 52;
+    if (frequency === 'monthly') periodsPerYear = 12;
+
+    const totalPeriods = years * periodsPerYear;
+    const periodicRate = (rate / 100) / periodsPerYear;
+
+    let futureValue = 0;
+    if (rate === 0) {
+      futureValue = savedPerPeriod * totalPeriods;
+    } else {
+      futureValue = savedPerPeriod * ((Math.pow(1 + periodicRate, totalPeriods) - 1) / periodicRate);
+    }
+    const principal = savedPerPeriod * totalPeriods;
+
+    setResults({
+      principal: principal,
+      interest: futureValue - principal,
+      total: futureValue
+    });
+  }, [currentSpend, targetSpend, frequency, years, rate]);
+
+  const applyPreset = (p) => {
+    setCurrentSpend(p.current);
+    setTargetSpend(p.target);
+    setFrequency(p.freq);
+  };
+
+  const handleCreateSubmit = (e) => {
+    e.preventDefault();
+    onAddCategory({
+      name: newCatName || 'Custom',
+      iconKey: newCatIcon,
+      current: newCatCurrent,
+      target: newCatTarget,
+      freq: 'daily' // Default to daily for simplicity in MVP, could make dynamic
+    });
+    setShowCreateModal(false);
+    // Reset form
+    setNewCatName('');
+    setNewCatCurrent(10);
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden max-w-md mx-auto border-x border-gray-200 shadow-2xl">
-      
-      {/* iOS Header */}
+    <div className="animate-in fade-in duration-300">
       <div className="pt-12 pb-4 px-6 bg-white border-b border-gray-100 flex justify-between items-end sticky top-0 z-10">
         <div>
-          <h2 className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-1">Impact Calculator</h2>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Compounder</h1>
-        </div>
-        <div className="bg-blue-100 p-2 rounded-full">
-          <TrendingUp className="text-blue-600" size={24} />
+            <h2 className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-1">Impact Calculator</h2>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Compounder</h1>
         </div>
       </div>
-
-      <div className="flex-1 overflow-y-auto pb-24 scrollbar-hide">
-        
-        {/* Result Card - Hero Section */}
-        <div className="m-4 mt-6 p-6 bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl shadow-xl text-white relative overflow-hidden">
+      
+      {/* Result Card */}
+      <div className="m-4 mt-6 p-6 bg-gradient-to-br from-blue-600 to-blue-700 rounded-3xl shadow-xl text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 p-32 bg-white opacity-5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-          
           <div className="relative z-10">
             <p className="text-blue-100 text-sm font-medium mb-1">Future Value ({years} Years)</p>
             <h2 className="text-4xl font-bold tracking-tight mb-4">{formatCurrency(results.total)}</h2>
-            
             <div className="flex gap-4">
               <div>
-                <p className="text-blue-200 text-xs uppercase tracking-wide">Actual Cost</p>
+                <p className="text-blue-200 text-xs uppercase tracking-wide">Actual Savings</p>
                 <p className="font-semibold text-lg">{formatCurrency(results.principal)}</p>
               </div>
               <div className="pl-4 border-l border-blue-500/50">
@@ -105,154 +436,184 @@ const App = () => {
               </div>
             </div>
           </div>
-        </div>
+      </div>
 
-        {/* Visualizer Bar */}
-        <div className="px-6 mb-8">
+       {/* Visualizer Bar */}
+       <div className="px-6 mb-8">
           <div className="flex justify-between text-xs text-gray-500 mb-2">
-            <span>Cost vs. Growth</span>
-            <span>{Math.round((results.total / results.principal) * 100)}% Return</span>
+            <span>Saved vs. Growth</span>
+            <span>{Math.round((results.total / (results.principal || 1)) * 100)}% Return</span>
           </div>
           <div className="h-4 w-full bg-gray-200 rounded-full overflow-hidden flex">
-            <div 
-              className="bg-gray-400 h-full" 
-              style={{ width: `${(results.principal / results.total) * 100}%` }}
-            ></div>
-            <div 
-              className="bg-green-500 h-full" 
-              style={{ width: `${(results.interest / results.total) * 100}%` }}
-            ></div>
+            <div className="bg-gray-400 h-full transition-all duration-500" style={{ width: `${(results.principal / results.total) * 100}%` }}></div>
+            <div className="bg-green-500 h-full transition-all duration-500" style={{ width: `${(results.interest / results.total) * 100}%` }}></div>
           </div>
         </div>
 
-        {/* Inputs Container */}
+        {/* Inputs */}
         <div className="px-4 space-y-6">
           
-          {/* Presets */}
+          {/* Dynamic Presets List */}
           <div className="flex gap-3 overflow-x-auto pb-2 px-1 scrollbar-hide">
-            {presets.map((p) => (
+            {categories.map((p) => (
               <button
-                key={p.name}
+                key={p.id}
                 onClick={() => applyPreset(p)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-medium transition-colors whitespace-nowrap
-                  ${cost === p.cost && frequency === p.freq 
-                    ? 'bg-gray-900 text-white border-gray-900' 
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+                  ${currentSpend === p.current && targetSpend === p.target && frequency === p.freq ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
               >
-                {p.icon}
-                {p.name}
+                {ICON_MAP[p.iconKey] || <DollarSign size={18} />} {p.name}
               </button>
             ))}
+            {/* Add Category Button */}
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-1 px-3 py-2 rounded-full border border-dashed border-gray-300 text-gray-400 hover:text-blue-600 hover:border-blue-400 transition-colors whitespace-nowrap text-sm font-medium"
+            >
+              <Plus size={16} /> New
+            </button>
           </div>
-
-          {/* Amount Input */}
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-gray-500">
-                <DollarSign size={18} />
-                <span className="text-sm font-medium">Daily Spend</span>
-              </div>
-              <span className="text-2xl font-bold text-gray-900">${cost}</span>
-            </div>
-            <input 
-              type="range" 
-              min="1" 
-              max="50" 
-              value={cost} 
-              onChange={(e) => setCost(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-            />
-            <div className="flex justify-between text-xs text-gray-400 mt-2">
-              <span>$1</span>
-              <span>$50</span>
-            </div>
-          </div>
-
-          {/* Frequency Toggle */}
-          <div className="bg-white p-1 rounded-xl border border-gray-200 flex shadow-sm">
+          
+          <div className="bg-white p-1 rounded-xl border border-gray-200 flex shadow-sm mb-2">
             {['daily', 'weekly', 'monthly'].map((freq) => (
-              <button
-                key={freq}
-                onClick={() => setFrequency(freq)}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg capitalize transition-all
-                  ${frequency === freq 
-                    ? 'bg-gray-100 text-gray-900 shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                {freq}
-              </button>
+              <button key={freq} onClick={() => setFrequency(freq)} className={`flex-1 py-2 text-sm font-medium rounded-lg capitalize transition-all ${frequency === freq ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{freq}</button>
             ))}
           </div>
 
-          {/* Timeframe Slider */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+            {/* Input 1: Current Spend */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <span className="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center"><DollarSign size={16} /></span>
+                  <span className="text-sm font-medium">Current Spend</span>
+                </div>
+                <span className="text-xl font-bold text-gray-900">${currentSpend}</span>
+              </div>
+              <input type="range" min="1" max="100" value={currentSpend} onChange={(e) => {
+                 const val = Number(e.target.value);
+                 setCurrentSpend(val);
+                 if (targetSpend > val) setTargetSpend(val);
+              }} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-red-500" />
+            </div>
+
+            {/* Input 2: Target Spend */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <span className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center"><DollarSign size={16} /></span>
+                  <span className="text-sm font-medium">Ideal Budget</span>
+                </div>
+                <span className="text-xl font-bold text-gray-900">${targetSpend}</span>
+              </div>
+              <input type="range" min="0" max={currentSpend} value={targetSpend} onChange={(e) => setTargetSpend(Number(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600" />
+            </div>
+
+            {/* Savings Summary */}
+            <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
+                <span className="text-gray-500 font-medium">Difference to Invest</span>
+                <span className="font-bold text-green-600 text-lg">+${currentSpend - targetSpend}</span>
+            </div>
+          </div>
+
           <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-gray-500">
-                <Calendar size={18} />
-                <span className="text-sm font-medium">Time Horizon</span>
-              </div>
+              <div className="flex items-center gap-2 text-gray-500"><Calendar size={18} /><span className="text-sm font-medium">Time Horizon</span></div>
               <span className="text-xl font-bold text-gray-900">{years} Years</span>
             </div>
-            <input 
-              type="range" 
-              min="1" 
-              max="40" 
-              value={years} 
-              onChange={(e) => setYears(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-            />
+            <input type="range" min="1" max="40" value={years} onChange={(e) => setYears(Number(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-900" />
           </div>
 
-           {/* Rate Slider */}
            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 text-gray-500">
-                <Percent size={18} />
-                <span className="text-sm font-medium">Market Return</span>
-              </div>
+              <div className="flex items-center gap-2 text-gray-500"><Percent size={18} /><span className="text-sm font-medium">Market Return</span></div>
               <span className="text-xl font-bold text-gray-900">{rate}%</span>
             </div>
-            <p className="text-xs text-gray-400 mb-4">
-              S&P 500 average is ~10%, inflation adjusted ~7%
-            </p>
-            <input 
-              type="range" 
-              min="1" 
-              max="15" 
-              step="0.5"
-              value={rate} 
-              onChange={(e) => setRate(Number(e.target.value))}
-              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500"
-            />
+            <input type="range" min="1" max="15" step="0.5" value={rate} onChange={(e) => setRate(Number(e.target.value))} className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-500" />
           </div>
         </div>
+        
+        {/* Spacer for bottom nav */}
+        <div className="h-20"></div>
 
-        {/* Informational Footer */}
-        <div className="px-6 py-8 text-center">
-            <p className="text-xs text-gray-400">
-              This calculation assumes interest is compounded based on your contribution frequency. 
-              Past performance does not guarantee future results.
-            </p>
-        </div>
+        {/* Create Category Modal */}
+        {showCreateModal && (
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-900">New Category</h3>
+                <button onClick={() => setShowCreateModal(false)} className="p-2 bg-gray-100 rounded-full text-gray-500">
+                  <X size={20} />
+                </button>
+              </div>
 
-      </div>
+              <form onSubmit={handleCreateSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Uber, Alcohol, Games..." 
+                    className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    required
+                  />
+                </div>
 
-      {/* iOS Tab Bar Simulation */}
-      <div className="bg-white border-t border-gray-200 px-6 py-2 pb-6 flex justify-between items-center text-xs font-medium text-gray-400 fixed bottom-0 w-full max-w-md">
-        <button className="flex flex-col items-center gap-1 text-blue-600">
-          <TrendingUp size={24} />
-          <span>Calculator</span>
-        </button>
-        <button className="flex flex-col items-center gap-1 hover:text-gray-600">
-          <Calendar size={24} />
-          <span>History</span>
-        </button>
-        <button className="flex flex-col items-center gap-1 hover:text-gray-600">
-          <Info size={24} />
-          <span>Learn</span>
-        </button>
-      </div>
+                <div>
+                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Icon</label>
+                   <div className="grid grid-cols-6 gap-2">
+                      {Object.keys(ICON_MAP).map(key => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setNewCatIcon(key)}
+                          className={`p-3 rounded-xl flex items-center justify-center transition-colors
+                            ${newCatIcon === key ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                        >
+                          {ICON_MAP[key]}
+                        </button>
+                      ))}
+                   </div>
+                </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Current Spend</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                      <input 
+                        type="number" 
+                        className="w-full p-3 pl-7 bg-gray-50 rounded-xl border border-gray-200 font-bold"
+                        value={newCatCurrent}
+                        onChange={(e) => setNewCatCurrent(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Target Goal</label>
+                     <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                      <input 
+                        type="number" 
+                        className="w-full p-3 pl-7 bg-gray-50 rounded-xl border border-gray-200 font-bold"
+                        value={newCatTarget}
+                        onChange={(e) => setNewCatTarget(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full py-4 mt-2 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/30 active:scale-95 transition-transform"
+                >
+                  Save Category
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
     </div>
   );
 };
