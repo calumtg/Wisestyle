@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ArrowRight, Settings, PieChart, ShieldCheck, Wallet, RefreshCw } from 'lucide-react';
+import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ArrowRight, Settings, ShieldCheck, Wallet, RefreshCw, X } from 'lucide-react';
 
 // --- Components ---
 
 const Button = ({ children, onClick, variant = 'primary', className = '', type = 'button' }) => {
-  const baseStyle = "px-4 py-3 rounded-xl font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2";
+  const baseStyle = "px-6 py-4 rounded-full font-bold text-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2";
   const variants = {
-    primary: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-900/20",
-    secondary: "bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700",
+    primary: "bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-[0_0_40px_-10px_rgba(16,185,129,0.3)] hover:shadow-[0_0_60px_-15px_rgba(16,185,129,0.5)]",
+    secondary: "bg-white/10 text-white hover:bg-white/20 border border-white/10 backdrop-blur-md",
     danger: "bg-red-500/10 text-red-400 hover:bg-red-500/20",
-    ghost: "bg-transparent text-slate-400 hover:text-emerald-400"
+    ghost: "bg-transparent text-slate-400 hover:text-white"
   };
   return (
     <button type={type} onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`}>
@@ -19,72 +19,152 @@ const Button = ({ children, onClick, variant = 'primary', className = '', type =
 };
 
 const Card = ({ children, className = '' }) => (
-  <div className={`bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl ${className}`}>
-    {children}
+  <div className={`relative overflow-hidden bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl ring-1 ring-white/5 ${className}`}>
+    <div className="relative z-10">
+      {children}
+    </div>
   </div>
 );
 
-const Input = ({ label, value, onChange, type = "text", placeholder }) => (
-  <div className="flex flex-col gap-2 mb-4">
-    <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">{label}</label>
-    <input
-      type={type}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="bg-slate-950 border border-slate-800 text-white rounded-xl p-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-slate-600"
-    />
+const ConversationalInput = ({ value, onChange, placeholder, type = "text", prefix = "" }) => (
+  <div className="relative group">
+    <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/20 to-teal-500/20 rounded-lg blur opacity-0 group-focus-within:opacity-100 transition duration-500"></div>
+    <div className="relative flex items-baseline border-b-2 border-white/10 focus-within:border-emerald-500 transition-colors py-2">
+      {prefix && <span className="text-3xl text-slate-500 font-light mr-2">{prefix}</span>}
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="w-full bg-transparent text-3xl md:text-4xl font-light text-white placeholder:text-slate-700 focus:outline-none"
+      />
+    </div>
   </div>
 );
+
+// --- Chart Component ---
+
+const WealthChart = ({ items, settings }) => {
+  const chartHeight = 200;
+  const chartWidth = 320;
+  const padding = 20;
+
+  const data = useMemo(() => {
+    const points = [];
+    const r = settings.interestRate / 100;
+    
+    for (let year = 0; year <= settings.timeHorizon; year++) {
+      let totalValue = 0;
+      let totalPrincipal = 0; // The "Cash" line
+      
+      items.forEach(item => {
+        let annualContribution = 0;
+        let lumpSum = 0;
+
+        if (item.isRecurring) {
+          let multiplier = 1;
+          if (item.frequency === 'daily') multiplier = 365;
+          if (item.frequency === 'weekly') multiplier = 52;
+          if (item.frequency === 'monthly') multiplier = 12;
+          annualContribution = item.cost * multiplier;
+          
+          totalPrincipal += (annualContribution * year);
+
+          if (year > 0) {
+            totalValue += annualContribution * ((Math.pow(1 + r, year) - 1) / r);
+          }
+        } else {
+          lumpSum = parseFloat(item.cost);
+          totalPrincipal += lumpSum;
+          totalValue += lumpSum * Math.pow(1 + r, year);
+        }
+      });
+
+      points.push({ year, value: totalValue, principal: totalPrincipal });
+    }
+    return points;
+  }, [items, settings]);
+
+  if (items.length === 0) return null;
+
+  const maxValue = Math.max(...data.map(d => d.value));
+  const scaleY = (val) => chartHeight - padding - ((val / maxValue) * (chartHeight - padding * 2));
+  const scaleX = (year) => padding + ((year / settings.timeHorizon) * (chartWidth - padding * 2));
+
+  const pathData = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.year)} ${scaleY(d.value)}`).join(' ');
+  const principalPathData = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.year)} ${scaleY(d.principal)}`).join(' ');
+  const areaPath = `${pathData} L ${scaleX(settings.timeHorizon)} ${chartHeight} L ${scaleX(0)} ${chartHeight} Z`;
+
+  return (
+    <div className="mt-8 mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-200">
+      <div className="flex justify-between items-end mb-4 px-1">
+        <h3 className="text-white/80 font-medium text-sm tracking-widest uppercase">Wealth Trajectory</h3>
+        <div className="flex gap-3 text-[10px] font-bold uppercase tracking-wider">
+          <div className="flex items-center gap-1 text-emerald-400"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>Invested</div>
+          <div className="flex items-center gap-1 text-slate-500"><div className="w-2 h-2 rounded-full bg-slate-600"></div>Cash Only</div>
+        </div>
+      </div>
+      
+      <div className="relative h-[200px] w-full">
+        <svg width="100%" height="100%" viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="overflow-visible">
+          <defs>
+            <linearGradient id="gradient" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          
+          {/* Cash Baseline (Grey) */}
+          <path d={principalPathData} fill="none" stroke="#475569" strokeWidth="2" strokeDasharray="4 4" className="opacity-50" />
+          
+          {/* Investment Growth (Green) */}
+          <path d={areaPath} fill="url(#gradient)" />
+          <path d={pathData} fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          
+          {/* End Dot */}
+          <circle cx={scaleX(settings.timeHorizon)} cy={scaleY(data[data.length - 1].value)} r="6" fill="#020617" stroke="#34d399" strokeWidth="3" />
+        </svg>
+      </div>
+    </div>
+  );
+};
 
 // --- Main App ---
 
-export default function Wisestyle() {
-  const [view, setView] = useState('dashboard'); // dashboard, add, settings
+export default function App() {
+  const [view, setView] = useState('dashboard');
   const [items, setItems] = useState([]);
   
-  // User Settings
   const [settings, setSettings] = useState({
-    interestRate: 7, // 7% annual return
-    inflationRate: 3, // 3% inflation
-    timeHorizon: 20, // 20 years
+    interestRate: 7,
+    inflationRate: 3,
+    timeHorizon: 20,
     currency: '$'
   });
 
-  // Load from local storage on mount (simulated)
   useEffect(() => {
     const savedItems = localStorage.getItem('wisestyle_items');
     if (savedItems) setItems(JSON.parse(savedItems));
-    
     const savedSettings = localStorage.getItem('wisestyle_settings');
     if (savedSettings) setSettings(JSON.parse(savedSettings));
   }, []);
 
-  // Save to local storage
   useEffect(() => {
     localStorage.setItem('wisestyle_items', JSON.stringify(items));
     localStorage.setItem('wisestyle_settings', JSON.stringify(settings));
   }, [items, settings]);
-
-  // --- Calculations ---
 
   const calculateFutureValue = (amount, isRecurring, frequency) => {
     const r = (settings.interestRate) / 100;
     const t = settings.timeHorizon;
     
     if (!isRecurring) {
-      // One-time compound interest: FV = PV * (1 + r)^t
       return amount * Math.pow((1 + r), t);
     } else {
-      // Future value of a series (Annuity)
-      // We need to annualize the recurring amount first
       let annualContribution = amount;
       if (frequency === 'daily') annualContribution = amount * 365;
       if (frequency === 'weekly') annualContribution = amount * 52;
       if (frequency === 'monthly') annualContribution = amount * 12;
-
-      // FV = PMT * (((1 + r)^t - 1) / r)
-      // Note: This assumes end-of-period payments and annual compounding for simplicity
       return annualContribution * ((Math.pow(1 + r, t) - 1) / r);
     }
   };
@@ -92,11 +172,9 @@ export default function Wisestyle() {
   const totals = useMemo(() => {
     let savedNow = 0;
     let projectedFuture = 0;
-    let monthlyPassiveIncome = 0; // The 4% rule on the projected future
+    let monthlyPassiveIncome = 0;
 
     items.forEach(item => {
-      // Current "Cash" Saved
-      // For recurring, we show the annual savings impact for "Now" context
       if (item.isRecurring) {
         let multiplier = 1;
         if (item.frequency === 'daily') multiplier = 365;
@@ -106,14 +184,10 @@ export default function Wisestyle() {
       } else {
         savedNow += parseFloat(item.cost);
       }
-
-      // Future Projection
       projectedFuture += calculateFutureValue(parseFloat(item.cost), item.isRecurring, item.frequency);
     });
 
-    // 4% Rule (Safe Withdrawal Rate)
     monthlyPassiveIncome = (projectedFuture * 0.04) / 12;
-
     return { savedNow, projectedFuture, monthlyPassiveIncome };
   }, [items, settings]);
 
@@ -128,7 +202,6 @@ export default function Wisestyle() {
 
     const handleSave = () => {
       if (!name || !cost) return;
-      
       const newItem = {
         id: Date.now(),
         name,
@@ -138,42 +211,34 @@ export default function Wisestyle() {
         category,
         date: new Date().toISOString()
       };
-
       setItems([newItem, ...items]);
       setView('dashboard');
     };
 
     return (
-      <div className="max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
-        <div className="flex items-center mb-6">
-          <Button variant="ghost" onClick={() => setView('dashboard')} className="mr-2 !px-2">
-            <ArrowRight className="rotate-180 w-6 h-6" />
+      <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-8 duration-500">
+        <div className="flex items-center justify-between mb-8">
+          <Button variant="ghost" onClick={() => setView('dashboard')} className="!p-2">
+            <X className="w-8 h-8 text-white" />
           </Button>
-          <h2 className="text-2xl font-bold text-white">Log a "Wisdom"</h2>
+          <span className="text-sm font-bold tracking-widest uppercase text-slate-500">Log Choice</span>
+          <div className="w-8"></div>
         </div>
 
-        <Card>
-          <div className="mb-6">
-            <label className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2 block">What did you resist?</label>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              {['Takeout', 'Subscription', 'Gadget', 'Clothes', 'Car', 'Alcohol'].map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setCategory(cat)}
-                  className={`p-2 rounded-lg text-sm font-medium border transition-colors ${category === cat ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400' : 'bg-slate-950 border-slate-800 text-slate-400'}`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-            <Input 
-              label="Item Description" 
-              placeholder="e.g., Morning Latte, New iPhone" 
+        <div className="flex-1 flex flex-col justify-center space-y-12">
+          <div className="space-y-4">
+            <h2 className="text-slate-400 font-light text-xl">I resisted buying...</h2>
+            <ConversationalInput 
+              placeholder="Morning Latte" 
               value={name} 
               onChange={(e) => setName(e.target.value)} 
             />
-            <Input 
-              label="Cost Saved" 
+          </div>
+
+          <div className="space-y-4">
+             <h2 className="text-slate-400 font-light text-xl">which would have cost...</h2>
+            <ConversationalInput 
+              prefix={settings.currency}
               placeholder="0.00" 
               type="number" 
               value={cost} 
@@ -181,186 +246,171 @@ export default function Wisestyle() {
             />
           </div>
 
-          <div className="mb-8 p-4 bg-slate-950 rounded-xl border border-slate-800">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-slate-300 font-medium">Is this a recurring habit?</span>
-              <button 
-                onClick={() => setIsRecurring(!isRecurring)}
-                className={`w-12 h-6 rounded-full p-1 transition-colors ${isRecurring ? 'bg-emerald-500' : 'bg-slate-700'}`}
-              >
-                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isRecurring ? 'translate-x-6' : 'translate-x-0'}`} />
-              </button>
-            </div>
-
-            {isRecurring && (
-              <div className="grid grid-cols-3 gap-2">
-                {['daily', 'weekly', 'monthly'].map(freq => (
-                  <button
-                    key={freq}
-                    onClick={() => setFrequency(freq)}
-                    className={`p-2 rounded-lg text-xs uppercase font-bold border transition-colors ${frequency === freq ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-500'}`}
-                  >
-                    {freq}
-                  </button>
-                ))}
+          <div className="pt-6">
+             <div 
+               onClick={() => setIsRecurring(!isRecurring)}
+               className={`cursor-pointer p-4 rounded-2xl border transition-all duration-300 ${isRecurring ? 'bg-indigo-500/20 border-indigo-500/50' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
+             >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-full ${isRecurring ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className={`font-medium ${isRecurring ? 'text-indigo-200' : 'text-slate-300'}`}>Is this a recurring habit?</h3>
+                  <p className="text-xs text-slate-500 mt-1">Calculates compound impact over {settings.timeHorizon} years.</p>
+                </div>
               </div>
-            )}
-            
-            <p className="mt-3 text-xs text-slate-500 leading-relaxed">
-              {isRecurring 
-                ? "Recurring items (Lifestyle Creep) are calculated as an annuity. Small habits compound massively."
-                : "One-off savings are calculated as a lump sum investment growing over time."}
-            </p>
+              
+              {isRecurring && (
+                <div className="flex gap-2 mt-4 animate-in fade-in slide-in-from-top-2">
+                  {['daily', 'weekly', 'monthly'].map(freq => (
+                    <button
+                      key={freq}
+                      onClick={(e) => { e.stopPropagation(); setFrequency(freq); }}
+                      className={`flex-1 py-2 rounded-lg text-xs uppercase font-bold tracking-wider transition-colors ${frequency === freq ? 'bg-indigo-500 text-white shadow-lg' : 'bg-black/20 text-indigo-200/50 hover:bg-black/40'}`}
+                    >
+                      {freq}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+        </div>
 
-          <Button onClick={handleSave} className="w-full text-lg">
-            Calculate Impact
-          </Button>
-        </Card>
+        <Button onClick={handleSave} className="w-full mt-auto mb-6 !text-xl !py-5">
+          Calculate Impact
+        </Button>
       </div>
     );
   };
 
   const SettingsView = () => (
-    <div className="max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
-       <div className="flex items-center mb-6">
+    <div className="pt-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+       <div className="flex items-center mb-8">
           <Button variant="ghost" onClick={() => setView('dashboard')} className="mr-2 !px-2">
             <ArrowRight className="rotate-180 w-6 h-6" />
           </Button>
-          <h2 className="text-2xl font-bold text-white">Projections</h2>
+          <h2 className="text-3xl font-light text-white">Projections</h2>
         </div>
         
-        <Card>
-          <div className="space-y-6">
-            <div>
-              <div className="flex justify-between mb-2">
-                <label className="text-slate-400 font-bold text-xs uppercase">Annual Return Rate</label>
-                <span className="text-emerald-400 font-mono">{settings.interestRate}%</span>
+        <div className="space-y-8">
+          <Card>
+            <div className="space-y-8">
+              <div>
+                <div className="flex justify-between mb-4">
+                  <label className="text-slate-400 font-bold text-xs uppercase tracking-widest">Annual Return</label>
+                  <span className="text-emerald-400 font-mono text-2xl">{settings.interestRate}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="1" max="15" 
+                  value={settings.interestRate} 
+                  onChange={(e) => setSettings({...settings, interestRate: parseInt(e.target.value)})}
+                  className="w-full accent-emerald-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                />
+                <p className="text-xs text-slate-500 mt-2">Adjusted for inflation (Real Return).</p>
               </div>
-              <input 
-                type="range" 
-                min="1" max="15" 
-                value={settings.interestRate} 
-                onChange={(e) => setSettings({...settings, interestRate: parseInt(e.target.value)})}
-                className="w-full accent-emerald-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
-              />
-              <p className="text-xs text-slate-500 mt-2">Historical S&P 500 average is ~10% (7% adjusted for inflation).</p>
-            </div>
 
-            <div>
-              <div className="flex justify-between mb-2">
-                <label className="text-slate-400 font-bold text-xs uppercase">Time Horizon (Years)</label>
-                <span className="text-indigo-400 font-mono">{settings.timeHorizon} Years</span>
+              <div>
+                <div className="flex justify-between mb-4">
+                  <label className="text-slate-400 font-bold text-xs uppercase tracking-widest">Time Horizon</label>
+                  <span className="text-indigo-400 font-mono text-2xl">{settings.timeHorizon}y</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="5" max="50" 
+                  value={settings.timeHorizon} 
+                  onChange={(e) => setSettings({...settings, timeHorizon: parseInt(e.target.value)})}
+                  className="w-full accent-indigo-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+                />
               </div>
-              <input 
-                type="range" 
-                min="5" max="50" 
-                value={settings.timeHorizon} 
-                onChange={(e) => setSettings({...settings, timeHorizon: parseInt(e.target.value)})}
-                className="w-full accent-indigo-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
-              />
             </div>
-            
-            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
-              <h4 className="text-white font-medium mb-2 flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                The Wisestyle Philosophy
-              </h4>
-              <p className="text-sm text-slate-400">
-                We use the <strong>Future Value</strong> formula to show you the opportunity cost of spending. 
-                Every dollar you don't spend today is an employee working for you forever.
-              </p>
-            </div>
+          </Card>
+          
+          <div className="px-4">
+            <h4 className="text-white font-medium mb-2 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-500" />
+              Philosophy
+            </h4>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              Wisestyle uses the <strong>Future Value</strong> formula. It reveals the opportunity cost of every dollar. A $5 coffee isn't $5 lost; it's $5 that can no longer work for you for the next 20 years.
+            </p>
           </div>
-        </Card>
+        </div>
     </div>
   );
 
   const DashboardView = () => (
-    <div className="max-w-md mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="pb-32 space-y-8 animate-in fade-in duration-700">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-start pt-2">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Wisestyle</h1>
-          <p className="text-slate-500 text-sm">Turn restraint into riches.</p>
+          <h1 className="text-lg font-bold text-white/90 tracking-widest uppercase">Wisestyle</h1>
+          <p className="text-slate-500 text-xs tracking-wider mt-1">Stoic Wealth Builder</p>
         </div>
-        <Button variant="secondary" onClick={() => setView('settings')} className="!px-3 !py-2 rounded-full">
-          <Settings className="w-5 h-5" />
+        <Button variant="secondary" onClick={() => setView('settings')} className="!p-3 !rounded-full">
+          <Settings className="w-5 h-5 text-slate-300" />
         </Button>
       </div>
 
-      {/* Main Stats */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-emerald-900 to-slate-900 border border-emerald-800/50 rounded-3xl p-6 shadow-2xl">
-        <div className="absolute top-0 right-0 p-32 bg-emerald-500/10 blur-3xl rounded-full pointer-events-none"></div>
-        
-        <div className="relative z-10">
-          <span className="text-emerald-300 font-bold text-xs uppercase tracking-widest mb-1 block">Projected Wealth ({settings.timeHorizon}y)</span>
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-white mb-2 tracking-tighter">
+      {/* Hero Number */}
+      <div className="text-center py-6 relative group">
+        <div className="absolute inset-0 bg-emerald-500/10 blur-[100px] rounded-full group-hover:bg-emerald-500/20 transition-all duration-1000"></div>
+        <div className="relative">
+          <p className="text-emerald-500/80 font-bold tracking-[0.2em] text-sm uppercase mb-2">Projected Wealth</p>
+          <h2 className="text-6xl sm:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50 tracking-tighter drop-shadow-2xl">
             {settings.currency}{totals.projectedFuture.toLocaleString(undefined, { maximumFractionDigits: 0 })}
           </h2>
-          
-          <div className="flex gap-4 mt-6">
-            <div className="bg-slate-950/40 p-3 rounded-xl border border-white/10 backdrop-blur-sm flex-1">
-              <div className="text-slate-400 text-xs mb-1">Items Resisted</div>
-              <div className="text-white font-mono font-bold">{items.length}</div>
-            </div>
-            <div className="bg-slate-950/40 p-3 rounded-xl border border-white/10 backdrop-blur-sm flex-1">
-              <div className="text-slate-400 text-xs mb-1">Monthly Passive</div>
-              <div className="text-emerald-400 font-mono font-bold">+{settings.currency}{totals.monthlyPassiveIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-            </div>
+          <div className="flex items-center justify-center gap-2 mt-4 text-slate-400">
+            <span className="bg-white/5 px-3 py-1 rounded-full text-xs font-mono border border-white/5">
+              +{settings.currency}{totals.monthlyPassiveIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}/mo passive
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Action Button */}
-      <Button onClick={() => setView('add')} className="w-full py-4 text-lg shadow-emerald-500/20">
-        <Plus className="w-6 h-6" />
-        Log Unspent Money
-      </Button>
+      {/* Chart */}
+      <WealthChart items={items} settings={settings} />
 
       {/* Recent History */}
       <div>
-        <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-indigo-400" />
-          Your Wise Decisions
+        <h3 className="text-white/60 font-bold mb-6 flex items-center gap-2 text-xs uppercase tracking-widest">
+          History
         </h3>
         
         {items.length === 0 ? (
-          <div className="text-center py-10 opacity-50">
-            <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-500">No entries yet. Resist an impulse buy to see your wealth grow.</p>
+          <div className="text-center py-12 border border-dashed border-white/10 rounded-3xl bg-white/5">
+            <Wallet className="w-10 h-10 text-slate-700 mx-auto mb-4" />
+            <p className="text-slate-500 font-light">Your journey to wealth begins with a single "No".</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {items.map((item, idx) => {
               const futureVal = calculateFutureValue(parseFloat(item.cost), item.isRecurring, item.frequency);
               return (
-                <div key={item.id} className="group bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-xl transition-all flex justify-between items-center">
-                  <div className="flex items-start gap-3">
-                    <div className="bg-slate-800 p-2 rounded-lg text-slate-400">
-                      {item.isRecurring ? <RefreshCw className="w-5 h-5 text-indigo-400" /> : <DollarSign className="w-5 h-5 text-emerald-400" />}
+                <div key={item.id} className="group relative bg-white/5 border border-white/5 hover:bg-white/10 p-5 rounded-2xl transition-all duration-300 flex justify-between items-center">
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-xl ${item.isRecurring ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                      {item.isRecurring ? <RefreshCw className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
                     </div>
                     <div>
-                      <h4 className="text-slate-200 font-medium">{item.name}</h4>
-                      <p className="text-xs text-slate-500 flex items-center gap-1">
-                        {item.category} • 
-                        <span className="text-slate-400"> Saved {settings.currency}{item.cost}{item.isRecurring && `/${item.frequency}`}</span>
+                      <h4 className="text-white font-medium text-lg leading-tight">{item.name}</h4>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Saved {settings.currency}{item.cost} {item.isRecurring && <span className="text-xs uppercase bg-black/30 px-1.5 py-0.5 rounded ml-1 text-indigo-400">{item.frequency}</span>}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-emerald-400 font-bold font-mono">
+                    <div className="text-emerald-400 font-bold font-mono text-lg">
                       +{settings.currency}{futureVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </div>
-                    <div className="text-[10px] uppercase text-slate-600 font-bold tracking-wider">
-                      in {settings.timeHorizon}y
                     </div>
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         setItems(items.filter(i => i.id !== item.id));
                       }}
-                      className="text-slate-700 hover:text-red-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-slate-600 hover:text-red-400 mt-2 opacity-0 group-hover:opacity-100 transition-all transform hover:scale-110"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -371,13 +421,21 @@ export default function Wisestyle() {
           </div>
         )}
       </div>
+
+      {/* Floating Action Button */}
+      <div className="fixed bottom-6 left-0 right-0 px-6 max-w-xl mx-auto z-50 pointer-events-none">
+        <Button onClick={() => setView('add')} className="w-full shadow-2xl pointer-events-auto !py-4">
+          <Plus className="w-6 h-6" />
+          Log Unspent Money
+        </Button>
+      </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
-      <div className="max-w-xl mx-auto min-h-screen border-x border-slate-900/50 shadow-2xl bg-black">
-        <div className="p-6">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black text-slate-200 font-sans selection:bg-emerald-500/30">
+      <div className="max-w-xl mx-auto min-h-screen border-x border-white/5 shadow-2xl relative">
+        <div className="p-6 h-full min-h-screen">
           {view === 'dashboard' && <DashboardView />}
           {view === 'add' && <AddItemView />}
           {view === 'settings' && <SettingsView />}
