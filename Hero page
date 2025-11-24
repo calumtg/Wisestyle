@@ -1,0 +1,388 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, TrendingUp, DollarSign, Calendar, Trash2, ArrowRight, Settings, PieChart, ShieldCheck, Wallet, RefreshCw } from 'lucide-react';
+
+// --- Components ---
+
+const Button = ({ children, onClick, variant = 'primary', className = '', type = 'button' }) => {
+  const baseStyle = "px-4 py-3 rounded-xl font-semibold transition-all duration-200 active:scale-95 flex items-center justify-center gap-2";
+  const variants = {
+    primary: "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-900/20",
+    secondary: "bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700",
+    danger: "bg-red-500/10 text-red-400 hover:bg-red-500/20",
+    ghost: "bg-transparent text-slate-400 hover:text-emerald-400"
+  };
+  return (
+    <button type={type} onClick={onClick} className={`${baseStyle} ${variants[variant]} ${className}`}>
+      {children}
+    </button>
+  );
+};
+
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl ${className}`}>
+    {children}
+  </div>
+);
+
+const Input = ({ label, value, onChange, type = "text", placeholder }) => (
+  <div className="flex flex-col gap-2 mb-4">
+    <label className="text-xs uppercase tracking-wider text-slate-400 font-bold">{label}</label>
+    <input
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="bg-slate-950 border border-slate-800 text-white rounded-xl p-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all placeholder:text-slate-600"
+    />
+  </div>
+);
+
+// --- Main App ---
+
+export default function Wisestyle() {
+  const [view, setView] = useState('dashboard'); // dashboard, add, settings
+  const [items, setItems] = useState([]);
+  
+  // User Settings
+  const [settings, setSettings] = useState({
+    interestRate: 7, // 7% annual return
+    inflationRate: 3, // 3% inflation
+    timeHorizon: 20, // 20 years
+    currency: '$'
+  });
+
+  // Load from local storage on mount (simulated)
+  useEffect(() => {
+    const savedItems = localStorage.getItem('wisestyle_items');
+    if (savedItems) setItems(JSON.parse(savedItems));
+    
+    const savedSettings = localStorage.getItem('wisestyle_settings');
+    if (savedSettings) setSettings(JSON.parse(savedSettings));
+  }, []);
+
+  // Save to local storage
+  useEffect(() => {
+    localStorage.setItem('wisestyle_items', JSON.stringify(items));
+    localStorage.setItem('wisestyle_settings', JSON.stringify(settings));
+  }, [items, settings]);
+
+  // --- Calculations ---
+
+  const calculateFutureValue = (amount, isRecurring, frequency) => {
+    const r = (settings.interestRate) / 100;
+    const t = settings.timeHorizon;
+    
+    if (!isRecurring) {
+      // One-time compound interest: FV = PV * (1 + r)^t
+      return amount * Math.pow((1 + r), t);
+    } else {
+      // Future value of a series (Annuity)
+      // We need to annualize the recurring amount first
+      let annualContribution = amount;
+      if (frequency === 'daily') annualContribution = amount * 365;
+      if (frequency === 'weekly') annualContribution = amount * 52;
+      if (frequency === 'monthly') annualContribution = amount * 12;
+
+      // FV = PMT * (((1 + r)^t - 1) / r)
+      // Note: This assumes end-of-period payments and annual compounding for simplicity
+      return annualContribution * ((Math.pow(1 + r, t) - 1) / r);
+    }
+  };
+
+  const totals = useMemo(() => {
+    let savedNow = 0;
+    let projectedFuture = 0;
+    let monthlyPassiveIncome = 0; // The 4% rule on the projected future
+
+    items.forEach(item => {
+      // Current "Cash" Saved
+      // For recurring, we show the annual savings impact for "Now" context
+      if (item.isRecurring) {
+        let multiplier = 1;
+        if (item.frequency === 'daily') multiplier = 365;
+        if (item.frequency === 'weekly') multiplier = 52;
+        if (item.frequency === 'monthly') multiplier = 12;
+        savedNow += (item.cost * multiplier); 
+      } else {
+        savedNow += parseFloat(item.cost);
+      }
+
+      // Future Projection
+      projectedFuture += calculateFutureValue(parseFloat(item.cost), item.isRecurring, item.frequency);
+    });
+
+    // 4% Rule (Safe Withdrawal Rate)
+    monthlyPassiveIncome = (projectedFuture * 0.04) / 12;
+
+    return { savedNow, projectedFuture, monthlyPassiveIncome };
+  }, [items, settings]);
+
+  // --- Views ---
+
+  const AddItemView = () => {
+    const [name, setName] = useState('');
+    const [cost, setCost] = useState('');
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [frequency, setFrequency] = useState('monthly');
+    const [category, setCategory] = useState('Impulse');
+
+    const handleSave = () => {
+      if (!name || !cost) return;
+      
+      const newItem = {
+        id: Date.now(),
+        name,
+        cost: parseFloat(cost),
+        isRecurring,
+        frequency: isRecurring ? frequency : null,
+        category,
+        date: new Date().toISOString()
+      };
+
+      setItems([newItem, ...items]);
+      setView('dashboard');
+    };
+
+    return (
+      <div className="max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="flex items-center mb-6">
+          <Button variant="ghost" onClick={() => setView('dashboard')} className="mr-2 !px-2">
+            <ArrowRight className="rotate-180 w-6 h-6" />
+          </Button>
+          <h2 className="text-2xl font-bold text-white">Log a "Wisdom"</h2>
+        </div>
+
+        <Card>
+          <div className="mb-6">
+            <label className="text-xs uppercase tracking-wider text-slate-400 font-bold mb-2 block">What did you resist?</label>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              {['Takeout', 'Subscription', 'Gadget', 'Clothes', 'Car', 'Alcohol'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setCategory(cat)}
+                  className={`p-2 rounded-lg text-sm font-medium border transition-colors ${category === cat ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400' : 'bg-slate-950 border-slate-800 text-slate-400'}`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <Input 
+              label="Item Description" 
+              placeholder="e.g., Morning Latte, New iPhone" 
+              value={name} 
+              onChange={(e) => setName(e.target.value)} 
+            />
+            <Input 
+              label="Cost Saved" 
+              placeholder="0.00" 
+              type="number" 
+              value={cost} 
+              onChange={(e) => setCost(e.target.value)} 
+            />
+          </div>
+
+          <div className="mb-8 p-4 bg-slate-950 rounded-xl border border-slate-800">
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-slate-300 font-medium">Is this a recurring habit?</span>
+              <button 
+                onClick={() => setIsRecurring(!isRecurring)}
+                className={`w-12 h-6 rounded-full p-1 transition-colors ${isRecurring ? 'bg-emerald-500' : 'bg-slate-700'}`}
+              >
+                <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isRecurring ? 'translate-x-6' : 'translate-x-0'}`} />
+              </button>
+            </div>
+
+            {isRecurring && (
+              <div className="grid grid-cols-3 gap-2">
+                {['daily', 'weekly', 'monthly'].map(freq => (
+                  <button
+                    key={freq}
+                    onClick={() => setFrequency(freq)}
+                    className={`p-2 rounded-lg text-xs uppercase font-bold border transition-colors ${frequency === freq ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'bg-slate-900 border-slate-800 text-slate-500'}`}
+                  >
+                    {freq}
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            <p className="mt-3 text-xs text-slate-500 leading-relaxed">
+              {isRecurring 
+                ? "Recurring items (Lifestyle Creep) are calculated as an annuity. Small habits compound massively."
+                : "One-off savings are calculated as a lump sum investment growing over time."}
+            </p>
+          </div>
+
+          <Button onClick={handleSave} className="w-full text-lg">
+            Calculate Impact
+          </Button>
+        </Card>
+      </div>
+    );
+  };
+
+  const SettingsView = () => (
+    <div className="max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4 duration-300">
+       <div className="flex items-center mb-6">
+          <Button variant="ghost" onClick={() => setView('dashboard')} className="mr-2 !px-2">
+            <ArrowRight className="rotate-180 w-6 h-6" />
+          </Button>
+          <h2 className="text-2xl font-bold text-white">Projections</h2>
+        </div>
+        
+        <Card>
+          <div className="space-y-6">
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="text-slate-400 font-bold text-xs uppercase">Annual Return Rate</label>
+                <span className="text-emerald-400 font-mono">{settings.interestRate}%</span>
+              </div>
+              <input 
+                type="range" 
+                min="1" max="15" 
+                value={settings.interestRate} 
+                onChange={(e) => setSettings({...settings, interestRate: parseInt(e.target.value)})}
+                className="w-full accent-emerald-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+              />
+              <p className="text-xs text-slate-500 mt-2">Historical S&P 500 average is ~10% (7% adjusted for inflation).</p>
+            </div>
+
+            <div>
+              <div className="flex justify-between mb-2">
+                <label className="text-slate-400 font-bold text-xs uppercase">Time Horizon (Years)</label>
+                <span className="text-indigo-400 font-mono">{settings.timeHorizon} Years</span>
+              </div>
+              <input 
+                type="range" 
+                min="5" max="50" 
+                value={settings.timeHorizon} 
+                onChange={(e) => setSettings({...settings, timeHorizon: parseInt(e.target.value)})}
+                className="w-full accent-indigo-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+            
+            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+              <h4 className="text-white font-medium mb-2 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                The Wisestyle Philosophy
+              </h4>
+              <p className="text-sm text-slate-400">
+                We use the <strong>Future Value</strong> formula to show you the opportunity cost of spending. 
+                Every dollar you don't spend today is an employee working for you forever.
+              </p>
+            </div>
+          </div>
+        </Card>
+    </div>
+  );
+
+  const DashboardView = () => (
+    <div className="max-w-md mx-auto space-y-6 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Wisestyle</h1>
+          <p className="text-slate-500 text-sm">Turn restraint into riches.</p>
+        </div>
+        <Button variant="secondary" onClick={() => setView('settings')} className="!px-3 !py-2 rounded-full">
+          <Settings className="w-5 h-5" />
+        </Button>
+      </div>
+
+      {/* Main Stats */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-emerald-900 to-slate-900 border border-emerald-800/50 rounded-3xl p-6 shadow-2xl">
+        <div className="absolute top-0 right-0 p-32 bg-emerald-500/10 blur-3xl rounded-full pointer-events-none"></div>
+        
+        <div className="relative z-10">
+          <span className="text-emerald-300 font-bold text-xs uppercase tracking-widest mb-1 block">Projected Wealth ({settings.timeHorizon}y)</span>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-white mb-2 tracking-tighter">
+            {settings.currency}{totals.projectedFuture.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </h2>
+          
+          <div className="flex gap-4 mt-6">
+            <div className="bg-slate-950/40 p-3 rounded-xl border border-white/10 backdrop-blur-sm flex-1">
+              <div className="text-slate-400 text-xs mb-1">Items Resisted</div>
+              <div className="text-white font-mono font-bold">{items.length}</div>
+            </div>
+            <div className="bg-slate-950/40 p-3 rounded-xl border border-white/10 backdrop-blur-sm flex-1">
+              <div className="text-slate-400 text-xs mb-1">Monthly Passive</div>
+              <div className="text-emerald-400 font-mono font-bold">+{settings.currency}{totals.monthlyPassiveIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action Button */}
+      <Button onClick={() => setView('add')} className="w-full py-4 text-lg shadow-emerald-500/20">
+        <Plus className="w-6 h-6" />
+        Log Unspent Money
+      </Button>
+
+      {/* Recent History */}
+      <div>
+        <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-indigo-400" />
+          Your Wise Decisions
+        </h3>
+        
+        {items.length === 0 ? (
+          <div className="text-center py-10 opacity-50">
+            <Wallet className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+            <p className="text-slate-500">No entries yet. Resist an impulse buy to see your wealth grow.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item, idx) => {
+              const futureVal = calculateFutureValue(parseFloat(item.cost), item.isRecurring, item.frequency);
+              return (
+                <div key={item.id} className="group bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 rounded-xl transition-all flex justify-between items-center">
+                  <div className="flex items-start gap-3">
+                    <div className="bg-slate-800 p-2 rounded-lg text-slate-400">
+                      {item.isRecurring ? <RefreshCw className="w-5 h-5 text-indigo-400" /> : <DollarSign className="w-5 h-5 text-emerald-400" />}
+                    </div>
+                    <div>
+                      <h4 className="text-slate-200 font-medium">{item.name}</h4>
+                      <p className="text-xs text-slate-500 flex items-center gap-1">
+                        {item.category} • 
+                        <span className="text-slate-400"> Saved {settings.currency}{item.cost}{item.isRecurring && `/${item.frequency}`}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-emerald-400 font-bold font-mono">
+                      +{settings.currency}{futureVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </div>
+                    <div className="text-[10px] uppercase text-slate-600 font-bold tracking-wider">
+                      in {settings.timeHorizon}y
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setItems(items.filter(i => i.id !== item.id));
+                      }}
+                      className="text-slate-700 hover:text-red-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-emerald-500/30">
+      <div className="max-w-xl mx-auto min-h-screen border-x border-slate-900/50 shadow-2xl bg-black">
+        <div className="p-6">
+          {view === 'dashboard' && <DashboardView />}
+          {view === 'add' && <AddItemView />}
+          {view === 'settings' && <SettingsView />}
+        </div>
+      </div>
+    </div>
+  );
+}
